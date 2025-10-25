@@ -1,0 +1,45 @@
+{
+    "name": "wikigods/additional-laravel-assertions",
+    "description": "Additional assertions for Laravel testing (supports Laravel 9-12)",
+    "keywords": [
+        "wikigods",
+        "laravel",
+        "testing",
+        "phpunit"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Jc So",
+            "email": "wikigods@gmail.com"
+        }
+    ],
+    "require-dev": {
+        "phpunit/phpunit": "^11.5.3",
+        "orchestra/testbench": "v10.4.0",
+        "mockery/mockery": "1.6.10",
+        "ext-pdo": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "WikiGods\\AdditionalTestAssertions\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "WikiGods\\AdditionalTestAssertions\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "WikiGods\\AdditionalTestAssertions\\AdditionalTestAssertionsServiceProvider"
+            ],
+            "aliases": {
+                "AdditionalTestAssertions": "WikiGods\\AdditionalTestAssertions\\Facades\\AdditionalTestAssertions"
+            }
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
