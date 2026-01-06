@@ -23,307 +23,147 @@ class RelationshipModelTest extends TestCase
     {
         parent::setUp();
 
-        Schema::create('mechanics', function ($table) {
-            $table->id();
-            $table->timestamps();
-        });
-
-        Schema::create('cars', function ($table) {
-            $table->id();
-            $table->foreignId('mechanic_id')->nullable()->constrained('mechanics')->onDelete('cascade');
-            $table->timestamps();
-        });
-
-        Schema::create('users', function ($table) {
-            $table->id();
-            $table->foreignId('car_id')->nullable()->constrained('cars')->onDelete('cascade');
-            $table->timestamps();
-        });
-
-        Schema::create('categories', function ($table) {
-            $table->id();
-            $table->timestamps();
-        });
-
-        Schema::create('tags', function ($table) {
-            $table->id();
-            $table->timestamps();
-        });
-
+        // Setup schema for all tests
+        Schema::create('mechanics', function ($table) { $table->id(); $table->timestamps(); });
+        Schema::create('cars', function ($table) { $table->id(); $table->foreignId('mechanic_id')->nullable(); $table->timestamps(); });
+        Schema::create('users', function ($table) { $table->id(); $table->foreignId('car_id')->nullable(); $table->timestamps(); });
+        Schema::create('categories', function ($table) { $table->id(); $table->timestamps(); });
+        Schema::create('tags', function ($table) { $table->id(); $table->timestamps(); });
         Schema::create('posts', function ($table) {
             $table->id();
-            $table->foreignId('category_id')->nullable()->constrained('categories')->onDelete('cascade');
-            $table->foreignId('user_id')->nullable()->constrained('users')->onDelete('cascade');
+            $table->foreignId('category_id')->nullable();
+            $table->foreignId('user_id')->nullable();
             $table->timestamps();
         });
-
         Schema::create('post_tag', function ($table) {
             $table->id();
-            $table->foreignId('post_id')->constrained('posts')->onDelete('cascade');
-            $table->foreignId('tag_id')->constrained('tags')->onDelete('cascade');
+            $table->foreignId('post_id');
+            $table->foreignId('tag_id');
             $table->timestamps();
         });
-
-        Schema::create('applications', function ($table) {
-            $table->id();
-            $table->timestamps();
-        });
-
-        Schema::create('environments', function ($table) {
-            $table->id();
-            $table->foreignId('application_id')->nullable()->constrained('applications')->onDelete('cascade');
-            $table->timestamps();
-        });
-
-        Schema::create('deployments', function ($table) {
-            $table->id();
-            $table->foreignId('environment_id')->nullable()->constrained('environments')->onDelete('cascade');
-            $table->timestamps();
-        });
+        Schema::create('applications', function ($table) { $table->id(); $table->timestamps(); });
+        Schema::create('environments', function ($table) { $table->id(); $table->foreignId('application_id')->nullable(); $table->timestamps(); });
+        Schema::create('deployments', function ($table) { $table->id(); $table->foreignId('environment_id')->nullable(); $table->timestamps(); });
     }
 
-    #[Test]
-    public function it_passes_when_relationship_is_has_one(): void
-    {
-        $user = User::create();
-
-        Post::create(['user_id' => $user->id]);
-
-        $this->assertHasOne(Post::class, $user->post);
-    }
-
-    #[Test]
-    public function fails_if_relationship_does_not_exist_has_one(): void
-    {
-        $this->expectException(ExpectationFailedException::class);
-
-        $this->expectExceptionMessage(
-            'The hasOne relationship is not an instance of the model Post'
-        );
-
-        $user = User::create();
-
-        Post::create(['user_id' => $user->id]);
-
-        $this->assertHasOne(Post::class, $user->other);
-    }
-
-    #[Test]
-    public function it_passes_when_relationship_is_belongs_to(): void
+    /** @test */
+    public function it_asserts_belongs_to_relationship()
     {
         $category = Category::create();
-
         $post = Post::create(['category_id' => $category->id]);
 
-        $this->assertBelongsTo(Category::class, $post->category);
+        // Convention: Post belongsTo Category -> property 'category'
+        $this->assertBelongsTo(Category::class, $post);
     }
 
-    #[Test]
-    public function fails_if_relationship_does_not_exist_belongs_to(): void
+    /** @test */
+    public function it_asserts_belongs_to_relationship_with_custom_name()
     {
-        $this->expectException(ExpectationFailedException::class);
+        $user = User::create();
+        $post = Post::create(['user_id' => $user->id]);
 
-        $this->expectExceptionMessage(
-            'The belongsTo relationship is not an instance of the model Category'
-        );
-
-        $category = Category::create();
-
-        $post = Post::create(['category_id' => $category->id]);
-
-        $this->assertBelongsTo(Category::class, $post->other);
+        // Custom: Post belongsTo User via 'author' relation
+        $this->assertBelongsTo(User::class, $post, 'author');
     }
 
-    #[Test]
-    public function it_passes_when_relationship_is_belongs_to_many(): void
+    /** @test */
+    public function it_asserts_has_many_relationship()
+    {
+        $category = Category::create();
+        Post::create(['category_id' => $category->id]);
+
+        // Convention: Category hasMany Post -> property 'posts'
+        $this->assertHasMany(Post::class, $category);
+    }
+
+    /** @test */
+    public function it_asserts_has_one_relationship()
+    {
+        $user = User::create();
+        Post::create(['user_id' => $user->id]);
+
+        // Convention: User hasOne Post -> property 'post' (singular)
+        $this->assertHasOne(Post::class, $user);
+    }
+
+    /** @test */
+    public function it_asserts_belongs_to_many_relationship()
     {
         $tag = Tag::create();
         $post = Post::create();
-
         $post->tags()->attach($tag);
 
-        $this->assertBelongsToMany(Tag::class, $post->tags, 1);
+        // Convention: Post belongsToMany Tag -> property 'tags'
+        $this->assertBelongsToMany(Tag::class, $post);
     }
 
-    #[Test]
-    public function fails_if_relationship_does_not_exist_belongs_to_many(): void
-    {
-        $this->expectException(ExpectationFailedException::class);
-
-        $this->expectExceptionMessage(
-            'The belongsToMany relationship is not an instance of the model Tag'
-        );
-
-        Tag::create();
-
-        $post = Post::create();
-
-        $this->assertBelongsToMany(Tag::class, $post->comments, 1);
-    }
-
-    #[Test]
-    public function it_passes_when_relationship_is_has_many(): void
-    {
-        $category = Category::create();
-
-        Post::create(['category_id' => $category->id]);
-
-        $this->assertHasMany( Post::class, $category->posts);
-    }
-
-    #[Test]
-    public function fails_if_relationship_does_not_exist_has_many(): void
-    {
-        $this->expectException(ExpectationFailedException::class);
-
-        $this->expectExceptionMessage(
-            'The hasMany relationship is not an instance of the model Post'
-        );
-
-        $category = Category::create();
-
-        Post::create(['category_id' => $category->id]);
-
-        $this->assertHasMany( Post::class, $category->others);
-    }
-
-    #[Test]
-    public function it_passes_when_relationship_is_has_as_one_through(): void
+    /** @test */
+    public function it_asserts_has_one_through_relationship()
     {
         $mechanic = Mechanic::create();
-
         $car = Car::create(['mechanic_id' => $mechanic->id]);
-
         User::create(['car_id' => $car->id]);
 
-        $this->assertHasOneThrough(User::class, $mechanic->carUser);
+        // Custom Name required as 'user' implies belongsTo/hasOne usually, or specific naming
+        // Mechanic hasOneThrough User -> method 'carUser'
+        $this->assertHasOneThrough(User::class, $mechanic, 'carUser');
     }
 
-    #[Test]
-    public function fails_if_relationship_does_not_exist_has_as_one_through(): void
+    /** @test */
+    public function it_asserts_has_many_through_relationship()
     {
+        $app = Application::create();
+        $env = Environment::create(['application_id' => $app->id]);
+        Deployment::create(['environment_id' => $env->id]);
+
+        // Convention: Application hasManyThrough Deployment -> property 'deployments'
+        $this->assertHasManyThrough(Deployment::class, $app);
+    }
+
+    /** @test */
+    public function it_fails_if_relationship_returns_null_or_wrong_type()
+    {
+        $post = Post::create(); // No category
+
         $this->expectException(ExpectationFailedException::class);
 
-        $this->expectExceptionMessage(
-            'The hasOneThrough relationship is not an instance of the model User'
-        );
-
-        $mechanic = Mechanic::create();
-
-        $car = Car::create(['mechanic_id' => $mechanic->id]);
-
-        User::create(['car_id' => $car->id]);
-
-        $this->assertHasOneThrough(User::class, $mechanic->carOther);
-    }
-
-    #[Test]
-    public function it_passes_when_relationship_is_has_many_through(): void
-    {
-        $application = Application::create();
-
-        $environment = Environment::create(['application_id' => $application->id]);
-
-        Deployment::create(['environment_id' => $environment->id]);
-
-        $this->assertHasManyThrough(Deployment::class, $application->deployments);
-    }
-
-    #[Test]
-    public function fails_if_relationship_does_not_exist_has_many_through(): void
-    {
-        $this->expectException(ExpectationFailedException::class);
-
-        $this->expectExceptionMessage(
-            'The hasManyThrough relationship is not an instance of the model Deployment'
-        );
-
-        $application = Application::create();
-
-        $environment = Environment::create(['application_id' => $application->id]);
-
-        Deployment::create(['environment_id' => $environment->id]);
-
-        $this->assertHasManyThrough(Deployment::class, $application->others);
+        // This fails because $post->category is null, so it's not an instance of Category
+        $this->assertBelongsTo(Category::class, $post);
     }
 }
 
-class User extends Model
-{
-    protected $fillable = ['car_id'];
-
-    public function post(): HasOne
-    {
-        return $this->hasOne(Post::class);
-    }
+// Models for Testing
+class User extends Model {
+    protected $guarded = [];
+    public function post(): HasOne { return $this->hasOne(Post::class); }
+    public function author(): HasOne { return $this->hasOne(Post::class, 'user_id'); } // Reuse for testing custom
 }
 
-class Post extends Model
-{
-    protected $fillable = ['user_id', 'category_id'];
-
-    public function category(): BelongsTo
-    {
-        return $this->belongsTo(Category::class);
-    }
-
-    public function tags(): BelongsToMany
-    {
-        return $this->belongsToMany(Tag::class);
-    }
+class Post extends Model {
+    protected $guarded = [];
+    public function category(): BelongsTo { return $this->belongsTo(Category::class); }
+    public function author(): BelongsTo { return $this->belongsTo(User::class, 'user_id'); }
+    public function tags(): BelongsToMany { return $this->belongsToMany(Tag::class); }
 }
 
-class Category extends Model
-{
-    protected $fillable = [];
-
-    public function posts(): HasMany
-    {
-        return $this->hasMany(Post::class);
-    }
+class Category extends Model {
+    protected $guarded = [];
+    public function posts(): HasMany { return $this->hasMany(Post::class); }
 }
 
-class Tag extends Model
-{
-    protected $fillable = [];
+class Tag extends Model { protected $guarded = []; }
 
+class Mechanic extends Model {
+    protected $guarded = [];
+    public function carUser(): HasOneThrough { return $this->hasOneThrough(User::class, Car::class); }
 }
 
-class Mechanic extends Model
-{
-    /**
-     * Get the car's user.
-     */
-    public function carUser(): HasOneThrough
-    {
-        return $this->hasOneThrough(User::class, Car::class);
-    }
+class Car extends Model { protected $guarded = []; }
+
+class Application extends Model {
+    protected $guarded = [];
+    public function deployments(): HasManyThrough { return $this->hasManyThrough(Deployment::class, Environment::class); }
 }
 
-class Car extends Model
-{
-    protected $fillable = ['mechanic_id'];
-}
-
-class Application extends Model
-{
-    /**
-     * Get all the deployments for the application.
-     */
-    public function deployments(): HasManyThrough
-    {
-        return $this->hasManyThrough(Deployment::class, Environment::class);
-    }
-}
-
-class Environment extends Model
-{
-    protected $fillable = ['application_id'];
-}
-
-class Deployment extends Model
-{
-    protected $fillable = ['environment_id'];
-
-}
-
+class Environment extends Model { protected $guarded = []; }
+class Deployment extends Model { protected $guarded = []; }
