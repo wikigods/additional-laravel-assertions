@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasOneThrough;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -40,18 +41,18 @@ trait AdditionalTestAssertions
     /**
      * Assert that a class uses a specific trait.
      */
-    protected function assertClassUsesTrait($class, $trait): void
+    protected function assertClassUsesTrait($trait, $class)
     {
-        $className = is_object($class) ? get_class($class) : $class;
-        $traits = class_uses($className);
+        $modelName = class_basename($class);
+        $traitName = class_basename($trait);
 
         // Recursive search for traits in parent classes could be added here if strictly needed,
         // but class_uses is usually sufficient for direct usage.
 
         $this->assertArrayHasKey(
             $trait,
-            $traits,
-            "The class [{$className}] expects to use the trait [{$trait}]."
+            class_uses($class),
+            "The class {$modelName} does not use {$traitName}."
         );
     }
 
@@ -61,99 +62,120 @@ trait AdditionalTestAssertions
      */
 
     /**
-     * Assert that a model has a UUID as a primary key and adheres to conventions.
+     * Assert that a model is configured to use UUIDs for its primary key.
+     *
+     * This assertion checks three things:
+     * 1. The model's properties (`$incrementing`, `$keyType`).
+     * 2. The primary key value of an existing model.
+     * 3. The database column type.
      */
-    protected function assertIsUuid($model): void
+    protected function assertIsUuid($model)
     {
         $instance = $this->getModelInstance($model);
         $keyName = $instance->getKeyName();
-        $keyValue = $instance->getKey();
+        $className = get_class($instance);
 
-        // 1. Check Configuration
+        // 1. Check Model Configuration first, as it's the fastest check.
         $this->assertFalse(
             $instance->getIncrementing(),
-            "The model [".get_class($instance)."] should have 'public \$incrementing = false;' for UUIDs."
+            "The model [{$className}] must have 'public \$incrementing = false;' to use UUIDs."
         );
 
         $this->assertEquals(
             'string',
             $instance->getKeyType(),
-            "The model [".get_class($instance)."] key type should be 'string'."
+            "The model [{$className}] must have 'protected \$keyType = \"string\";' to use UUIDs."
         );
 
-        // 2. Check Value (if exists)
-        if ($keyValue) {
+        // 2. If the model exists, check if its key is a valid UUID.
+        // This should happen before the schema check, as it's a common failure point.
+        if ($instance->exists) {
+            $keyValue = $instance->getKey();
             $this->assertTrue(
                 Str::isUuid($keyValue),
-                "The value of [{$keyName}] in [".get_class($instance)."] is not a valid UUID. Value: [{$keyValue}]"
+                "The key [{$keyName}] on model [{$className}] is not a valid UUID. Value: [{$keyValue}]"
             );
         }
+
+        // 3. Check Database Column Type. This is a slower check and should come last.
+        $connection = $instance->getConnection();
+        $tableName = $instance->getTable();
+        $columnType = Schema::connection($connection->getName())->getColumnType($tableName, $keyName);
+
+        // We allow a range of string-like types that can store UUIDs.
+        // This list is expanded to be more compatible with different database drivers.
+        $allowedTypes = ['uuid', 'string', 'char', 'guid', 'varchar', 'text'];
+        $this->assertContains(
+            Str::lower($columnType),
+            $allowedTypes,
+            "The column [{$keyName}] on table [{$tableName}] is of type [{$columnType}], which is not suitable for UUIDs. Use `\$table->uuid('{$keyName}');` in your migration."
+        );
     }
 
     /**
      * Assert that a model defines the expected attribute casts.
      */
-    protected function assertCasts($model, array $expectedCasts): void
+    protected function assertCasts($model, $attributes)
     {
-        $instance = $this->getModelInstance($model);
-        $actualCasts = $instance->getCasts();
+        $model = (new $model);
 
-        // Merge defaults usually handled by Laravel (id, etc) if necessary,
-        // but exact match on requested keys is cleaner.
+        $arrayMerge = array_merge([$model->getKeyName() => $model->getKeyType()], $attributes);
 
-        foreach ($expectedCasts as $key => $type) {
-            $this->assertArrayHasKey(
-                $key,
-                $actualCasts,
-                "The attribute [{$key}] is missing from the casts array in [".get_class($instance)."]."
-            );
+        $diffExport = var_export(array_diff($arrayMerge, $model->getCasts()), true);
 
-            // Simple normalization for class names (remove leading backslash)
-            $expectedType = ltrim($type, '\\');
-            $actualType = ltrim($actualCasts[$key], '\\');
+        $short = str_replace(['array (', ')'], ['[', ']'], $diffExport);
 
-            // Handle partial matches for complex casts like 'decimal:2' if needed, or stick to exact.
-            // For robust testing, exact match is preferred.
-            $this->assertEquals(
-                $expectedType,
-                $actualType,
-                "The cast for attribute [{$key}] in [".get_class($instance)."] does not match."
-            );
-        }
+        $this->assertEquals(
+            $arrayMerge,
+            $model->getCasts(),
+            "The 'casts' array in ".PHP_EOL.$short.PHP_EOL." does not match expectation."
+        );
     }
 
     /**
      * Assert that a model defines the expected attribute appends.
      */
-    protected function assertAppends($model, array $expectedAppends): void
+    protected function assertAppends($model, $attributes)
     {
-        $instance = $this->getModelInstance($model);
+        $model = (new $model);
+
+        $diffExport = var_export(array_diff($attributes, $model->getCasts()), true);
+
+        $short = str_replace(['array (', ')'], ['[', ']'], $diffExport);
 
         $this->assertEquals(
-            $expectedAppends,
-            $instance->getAppends(),
-            "The 'appends' array in [".get_class($instance)."] does not match expectation."
+            $attributes,
+            $model->getAppends(),
+            "The 'appends' array in ".PHP_EOL.$short.PHP_EOL." does not match expectation."
         );
+
     }
 
     /**
      * Assert the Route Key Name of the model.
      */
-    protected function assertGetRouteKeyName($model, $expectedKey): void
+    protected function assertGetRouteKeyName($model, $field)
     {
-        $instance = $this->getModelInstance($model);
+        $newModel = (new $model);
+
+        $this->assertTrue(
+            Schema::hasColumn($newModel->getTable(), $field),
+            "The table '{$newModel->getTable()}' does not contain the expected column '{$field}'."
+        );
 
         $this->assertEquals(
-            $expectedKey,
-            $instance->getRouteKeyName(),
-            "The route key name for [".get_class($instance)."] should be [{$expectedKey}]."
+            $field,
+            $newModel?->getRouteKeyName(),
+            "The route key name for ".class_basename($model)." should be {$field}."
         );
+
+
     }
 
     /**
      * Assert a mutator properly sets a timestamp (Carbon) and handles nulls.
      */
-    protected function assertSetTimestampAttribute($model, $attribute, $testValue = '2025-01-01 12:00:00', $allowNull = true): void
+    protected function assertSetTimestampAttribute($model, $attribute, $testValue = '2025-01-01 12:00:00', $allowNull = true)
     {
         $instance = $this->getModelInstance($model);
 
@@ -226,32 +248,32 @@ trait AdditionalTestAssertions
         );
     }
 
-    protected function assertBelongsTo($model, $relationName, $relatedClass): void
+    protected function assertBelongsTo($model, $relationName, $relatedClass)
     {
         $this->assertRelation(BelongsTo::class, $model, $relationName, $relatedClass);
     }
 
-    protected function assertHasOne($model, $relationName, $relatedClass): void
+    protected function assertHasOne($model, $relationName, $relatedClass)
     {
         $this->assertRelation(HasOne::class, $model, $relationName, $relatedClass);
     }
 
-    protected function assertHasMany($model, $relationName, $relatedClass): void
+    protected function assertHasMany($model, $relationName, $relatedClass)
     {
         $this->assertRelation(HasMany::class, $model, $relationName, $relatedClass);
     }
 
-    protected function assertBelongsToMany($model, $relationName, $relatedClass): void
+    protected function assertBelongsToMany($model, $relationName, $relatedClass)
     {
         $this->assertRelation(BelongsToMany::class, $model, $relationName, $relatedClass);
     }
 
-    protected function assertHasOneThrough($model, $relationName, $relatedClass): void
+    protected function assertHasOneThrough($model, $relationName, $relatedClass)
     {
         $this->assertRelation(HasOneThrough::class, $model, $relationName, $relatedClass);
     }
 
-    protected function assertHasManyThrough($model, $relationName, $relatedClass): void
+    protected function assertHasManyThrough($model, $relationName, $relatedClass)
     {
         $this->assertRelation(HasManyThrough::class, $model, $relationName, $relatedClass);
     }
@@ -264,36 +286,21 @@ trait AdditionalTestAssertions
     /**
      * Assert that an event does not broadcast to the current user.
      */
-    protected function assertDontBroadcastToCurrentUser($event, $socketId = 'socket-id'): void
+    protected function assertDontBroadcastToCurrentUser($event, $socketId = 'socket-id')
     {
         $this->assertInstanceOf(ShouldBroadcast::class, $event);
 
-        // Simulate logic often used in events constructor or broadcast property
-        if (property_exists($event, 'socket')) {
-            $event->socket = $socketId;
-        }
-
-        // We check if the trait method is used effectively via the socket property verification
-        // or stricter mocking if we had the Broadcast facade mocked.
-        // Assuming the user implements `use InteractsWithSockets` or manually handles it.
-
         $this->assertEquals(
-            $socketId,
+            $socketId, // Generated by Broadcast::shouldReceive('socket')->andReturn('socket-id');
             $event->socket,
-            'The event ' . get_class($event) . ' property [socket] was not set correctly.'
-        );
-
-        // Additionally, check if methods exist
-        $this->assertTrue(
-            method_exists($event, 'dontBroadcastToCurrentUser'),
-            "Event does not use InteractsWithSockets or implement dontBroadcastToCurrentUser."
+            'The event ' . get_class($event) . ' must call the method "dontBroadcastToCurrentUser" in the constructor.'
         );
     }
 
     /**
      * Assert the type of broadcast channel.
      */
-    protected function assertEventChannelType($channelType, $event): void
+    protected function assertEventChannelType($channelType, $event)
     {
         $types = [
             'public' => Channel::class,
@@ -302,7 +309,7 @@ trait AdditionalTestAssertions
         ];
 
         if (!array_key_exists($channelType, $types)) {
-            $this->fail("Invalid channel type [{$channelType}]. Valid types: " . implode(', ', array_keys($types)));
+            $this->fail("The channel type '{$channelType}' is not valid. Valid types are: " . implode(', ', array_keys($types)));
         }
 
         $channels = $event->broadcastOn();
@@ -314,14 +321,14 @@ trait AdditionalTestAssertions
         $this->assertInstanceOf(
             $types[$channelType],
             $channel,
-            "The channel returned is not of type [{$channelType}]."
+            "The channel returned is not of type {$channelType}."
         );
     }
 
     /**
      * Assert the name of the broadcast channel.
      */
-    protected function assertEventChannelName($channelName, $event): void
+    protected function assertEventChannelName($channelName, $event)
     {
         $channels = $event->broadcastOn();
         $channels = is_array($channels) ? $channels : [$channels];

@@ -2,8 +2,8 @@
 
 namespace WikiGods\AdditionalTestAssertions\Tests\Unit;
 
+use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\Test;
-use PHPUnit\Framework\ExpectationFailedException;
 use WikiGods\AdditionalTestAssertions\Tests\TestCase;
 
 class ClassUsesTraitTest extends TestCase
@@ -17,8 +17,11 @@ class ClassUsesTraitTest extends TestCase
     /** @test */
     public function it_fails_if_class_does_not_use_trait()
     {
-        $this->expectException(ExpectationFailedException::class);
-        $this->expectExceptionMessage('must use');
+        $this->expectException(AssertionFailedError::class);
+
+        $this->expectExceptionMessage(
+            "The class ClassWithoutTrait does not use SampleTrait."
+        );
 
         $this->assertClassUsesTrait(SampleTrait::class, ClassWithoutTrait::class);
     }
