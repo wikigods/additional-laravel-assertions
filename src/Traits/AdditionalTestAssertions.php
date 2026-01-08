@@ -165,7 +165,7 @@ trait AdditionalTestAssertions
 
         $this->assertEquals(
             $field,
-            $newModel?->getRouteKeyName(),
+            $newModel->getRouteKeyName(),
             "The route key name for ".class_basename($model)." should be {$field}."
         );
 
@@ -175,44 +175,36 @@ trait AdditionalTestAssertions
     /**
      * Assert a mutator properly sets a timestamp (Carbon) and handles nulls.
      */
-    protected function assertSetTimestampAttribute($model, $attribute, $testValue = '2025-01-01 12:00:00', $allowNull = true)
+    protected function assertSetTimestampAttribute($model, $field, $data = '13-07-2025')
     {
-        $instance = $this->getModelInstance($model);
 
-        // Setter naming convention
-        $method = 'set' . Str::studly($attribute) . 'Attribute';
+        $method = 'set' . Str::studly($field) . 'Attribute';
 
-        // 1. Check if mutator exists (if using old style) or just test behavior
-        if (method_exists($instance, $method)) {
-            $instance->{$method}($testValue);
-        } else {
-            // Modern Laravel (Casts/Attributes) or direct assignment
-            $instance->{$attribute} = $testValue;
+        $model = new $model;
+
+        if (!Schema::hasColumn($model->getTable(), $field)){
+            $this->fail("The table '{$model->getTable()}' does not contain the expected column '{$field}'.");
         }
 
-        $this->assertInstanceOf(
-            Carbon::class,
-            $instance->{$attribute},
-            "The attribute [{$attribute}] was not cast to an instance of Carbon."
-        );
+        if (!method_exists($model, $method)){
+            $this->fail("The method {$method} does not exist in the model ".class_basename($model).".");
+        }
 
-        $this->assertEquals(
-            Carbon::parse($testValue)->format('Y-m-d H:i:s'),
-            $instance->{$attribute}->format('Y-m-d H:i:s'),
-            "The attribute [{$attribute}] value matches the expected timestamp."
-        );
+        if (!$data){
+            $model->{$method}(null);
 
-        if ($allowNull) {
-            if (method_exists($instance, $method)) {
-                $instance->{$method}(null);
-            } else {
-                $instance->{$attribute} = null;
-            }
-            $this->assertNull(
-                $instance->{$attribute},
-                "The attribute [{$attribute}] should accept null values."
+            $this->assertNull($model->{$field});
+        }else{
+            $model->{$method}($data);
+
+            $this->assertInstanceOf(Carbon::class,
+                $model->{$field},
+                "The attribute {$field} was not cast to an instance of Carbon."
             );
+
+            $this->assertEquals(Carbon::parse($data)->format('Y-m-d H:i:s'), $model->{$field});
         }
+
     }
 
     /* -----------------------------------------------------------------
