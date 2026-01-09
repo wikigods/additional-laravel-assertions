@@ -16,10 +16,6 @@ class IsUuidTest extends TestCase
     {
         parent::setUp();
 
-        Schema::create('model_with_ids', function (Blueprint $table) {
-            $table->uuid('id')->primary();
-        });
-
         // Schema for a correctly configured model with a UUID
         Schema::create('model_with_uuids', function (Blueprint $table) {
             $table->uuid('id')->primary();
@@ -63,9 +59,6 @@ class IsUuidTest extends TestCase
 }
 
 // Correctly configured model
-class ModelWithId extends Model{
-    public $timestamps = false;
-}
 class ModelWithUuid extends Model
 {
     protected $table = 'model_with_uuids';
