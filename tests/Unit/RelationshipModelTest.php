@@ -126,6 +126,7 @@ class RelationshipModelTest extends TestCase
         $post = Post::create(); // No category
 
         $this->expectException(ExpectationFailedException::class);
+        $this->expectExceptionMessage('The model Post was expected to define a belongsTo relationship "category", but it was not found.');
 
         // This fails because $post->category is null, so it's not an instance of Category
         $this->assertBelongsTo(Category::class, $post);

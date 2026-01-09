@@ -21,24 +21,6 @@ use InvalidArgumentException;
 trait AdditionalTestAssertions
 {
     /**
-     * Helper interno para obtener instancia de modelo.
-     * @param string|object $model
-     * @return Model
-     */
-    private function getModelInstance($model)
-    {
-        if (is_object($model)) {
-            return $model;
-        }
-
-        if (is_string($model) && class_exists($model)) {
-            return new $model;
-        }
-
-        throw new InvalidArgumentException("Assetion expects a Model instance or class name, received: " . gettype($model));
-    }
-
-    /**
      * Assert that a class uses a specific trait.
      */
     protected function assertClassUsesTrait($trait, $class)
@@ -71,20 +53,20 @@ trait AdditionalTestAssertions
      */
     protected function assertIsUuid($model)
     {
-        $instance = $this->getModelInstance($model);
+        $instance = (new $model);
         $keyName = $instance->getKeyName();
         $className = get_class($instance);
 
         // 1. Check Model Configuration first, as it's the fastest check.
         $this->assertFalse(
             $instance->getIncrementing(),
-            "The model [{$className}] must have 'public \$incrementing = false;' to use UUIDs."
+            "The model {$className}] must have 'public \$incrementing = false;' to use UUIDs."
         );
 
         $this->assertEquals(
             'string',
             $instance->getKeyType(),
-            "The model [{$className}] must have 'protected \$keyType = \"string\";' to use UUIDs."
+            "The model {$className} must have 'protected \$keyType = \"string\";' to use UUIDs."
         );
 
         // 2. If the model exists, check if its key is a valid UUID.
@@ -93,7 +75,7 @@ trait AdditionalTestAssertions
             $keyValue = $instance->getKey();
             $this->assertTrue(
                 Str::isUuid($keyValue),
-                "The key [{$keyName}] on model [{$className}] is not a valid UUID. Value: [{$keyValue}]"
+                "The key {$keyName} on model [{$className}] is not a valid UUID. Value: [{$keyValue}]"
             );
         }
 
@@ -108,7 +90,7 @@ trait AdditionalTestAssertions
         $this->assertContains(
             Str::lower($columnType),
             $allowedTypes,
-            "The column [{$keyName}] on table [{$tableName}] is of type [{$columnType}], which is not suitable for UUIDs. Use `\$table->uuid('{$keyName}');` in your migration."
+            "The column {$keyName} on table {$tableName} is of type {$columnType}, which is not suitable for UUIDs. Use `\$table->uuid('{$keyName}');` in your migration."
         );
     }
 
@@ -212,62 +194,57 @@ trait AdditionalTestAssertions
      | -----------------------------------------------------------------
      */
 
-    private function assertRelation($type, $model, $relationName, $relatedClass)
+    private function assertRelation($type, $model, $relation, $customName)
     {
-        $instance = $this->getModelInstance($model);
+        $relations = ['HasMany', 'BelongsToMany', 'HasManyThrough'];
+        $typeClassName = class_basename($type);
+        $modelClassName = class_basename($model);
+        $relationClassName = class_basename($relation);
 
-        // Check method existence
-        $this->assertTrue(
-            method_exists($instance, $relationName),
-            "The model [".get_class($instance)."] does not have a method named [{$relationName}]."
-        );
+        $plural = in_array($typeClassName, $relations)
+            ? Str::plural($modelClassName) : $modelClassName;
 
-        // Call the method to get the Relation object
-        $relation = $instance->{$relationName}();
+        $customNameFinal = $customName ? $customName : Str::lower($plural);
 
-        // Check Relation Type
+        $relationCustomFinal = in_array($typeClassName, $relations)
+            ? $relation->{$customNameFinal}->first() : $relation->{$customNameFinal};
+
         $this->assertInstanceOf(
-            $type,
-            $relation,
-            "The relation [{$relationName}] is not an instance of [{$type}]."
+            $model,
+            $relationCustomFinal,
+            'The model ' . $relationClassName . ' was expected to define a '. lcfirst($typeClassName) .' relationship "' . $customNameFinal . '", but it was not found.'
         );
 
-        // Check Related Model Class
-        $this->assertInstanceOf(
-            $relatedClass,
-            $relation->getRelated(),
-            "The related model in [{$relationName}] is not an instance of [{$relatedClass}]."
-        );
     }
 
-    protected function assertBelongsTo($model, $relationName, $relatedClass)
+    protected function assertBelongsTo($model, $relation, $customName = null)
     {
-        $this->assertRelation(BelongsTo::class, $model, $relationName, $relatedClass);
+        $this->assertRelation(BelongsTo::class, $model, $relation, $customName);
     }
 
-    protected function assertHasOne($model, $relationName, $relatedClass)
+    protected function assertHasOne($model, $relation, $customName = null)
     {
-        $this->assertRelation(HasOne::class, $model, $relationName, $relatedClass);
+        $this->assertRelation(HasOne::class, $model, $relation, $customName);
     }
 
-    protected function assertHasMany($model, $relationName, $relatedClass)
+    protected function assertHasMany($model, $relation, $customName = null)
     {
-        $this->assertRelation(HasMany::class, $model, $relationName, $relatedClass);
+        $this->assertRelation(HasMany::class, $model, $relation, $customName);
     }
 
-    protected function assertBelongsToMany($model, $relationName, $relatedClass)
+    protected function assertBelongsToMany($model, $relation, $customName = null)
     {
-        $this->assertRelation(BelongsToMany::class, $model, $relationName, $relatedClass);
+        $this->assertRelation(BelongsToMany::class, $model, $relation, $customName);
     }
 
-    protected function assertHasOneThrough($model, $relationName, $relatedClass)
+    protected function assertHasOneThrough($model, $relation, $customName = null)
     {
-        $this->assertRelation(HasOneThrough::class, $model, $relationName, $relatedClass);
+        $this->assertRelation(HasOneThrough::class, $model, $relation, $customName);
     }
 
-    protected function assertHasManyThrough($model, $relationName, $relatedClass)
+    protected function assertHasManyThrough($model, $relation, $customName = null)
     {
-        $this->assertRelation(HasManyThrough::class, $model, $relationName, $relatedClass);
+        $this->assertRelation(HasManyThrough::class, $model, $relation, $customName);
     }
 
     /* -----------------------------------------------------------------
