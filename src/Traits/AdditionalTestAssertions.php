@@ -60,7 +60,7 @@ trait AdditionalTestAssertions
         // 1. Check Model Configuration first, as it's the fastest check.
         $this->assertFalse(
             $instance->getIncrementing(),
-            "The model {$className}] must have 'public \$incrementing = false;' to use UUIDs."
+            "The model {$className} must have 'public \$incrementing = false;' to use UUIDs."
         );
 
         $this->assertEquals(
@@ -75,7 +75,7 @@ trait AdditionalTestAssertions
             $keyValue = $instance->getKey();
             $this->assertTrue(
                 Str::isUuid($keyValue),
-                "The key {$keyName} on model [{$className}] is not a valid UUID. Value: [{$keyValue}]"
+                "The key {$keyName} on model {$className} is not a valid UUID. Value: {$keyValue}"
             );
         }
 
