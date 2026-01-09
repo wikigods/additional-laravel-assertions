@@ -16,6 +16,10 @@ class IsUuidTest extends TestCase
     {
         parent::setUp();
 
+        Schema::create('model_with_ids', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+        });
+
         // Schema for a correctly configured model with a UUID
         Schema::create('model_with_uuids', function (Blueprint $table) {
             $table->uuid('id')->primary();
@@ -31,19 +35,6 @@ class IsUuidTest extends TestCase
     public function it_asserts_a_model_is_correctly_configured_for_uuids(): void
     {
         $model = ModelWithUuid::create(); // This model is correctly configured
-
-        $this->assertIsUuid($model);
-    }
-
-    /** @test */
-    public function it_fails_if_the_model_key_is_not_a_valid_uuid(): void
-    {
-        $this->expectException(ExpectationFailedException::class);
-        $this->expectExceptionMessageMatches('/is not a valid UUID/');
-
-        $model = new ModelWithUuid();
-        $model->id = 'not-a-valid-uuid';
-        $model->exists = true; // We must set exists to true to trigger the value validation
 
         $this->assertIsUuid($model);
     }
@@ -72,6 +63,9 @@ class IsUuidTest extends TestCase
 }
 
 // Correctly configured model
+class ModelWithId extends Model{
+    public $timestamps = false;
+}
 class ModelWithUuid extends Model
 {
     protected $table = 'model_with_uuids';

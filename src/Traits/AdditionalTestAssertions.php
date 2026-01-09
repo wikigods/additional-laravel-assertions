@@ -53,44 +53,33 @@ trait AdditionalTestAssertions
      */
     protected function assertIsUuid($model)
     {
-        $instance = (new $model);
-        $keyName = $instance->getKeyName();
-        $className = get_class($instance);
-
-        // 1. Check Model Configuration first, as it's the fastest check.
-        $this->assertFalse(
-            $instance->getIncrementing(),
-            "The model {$className} must have 'public \$incrementing = false;' to use UUIDs."
-        );
-
-        $this->assertEquals(
-            'string',
-            $instance->getKeyType(),
-            "The model {$className} must have 'protected \$keyType = \"string\";' to use UUIDs."
-        );
-
-        // 2. If the model exists, check if its key is a valid UUID.
-        // This should happen before the schema check, as it's a common failure point.
-        if ($instance->exists) {
-            $keyValue = $instance->getKey();
-            $this->assertTrue(
-                Str::isUuid($keyValue),
-                "The key {$keyName} on model {$className} is not a valid UUID. Value: {$keyValue}"
-            );
-        }
-
-        // 3. Check Database Column Type. This is a slower check and should come last.
-        $connection = $instance->getConnection();
-        $tableName = $instance->getTable();
+        $className = get_class($model);
+        $keyName = $model->getKeyName();
+        $connection = $model->getConnection();
+        $tableName = $model->getTable();
         $columnType = Schema::connection($connection->getName())->getColumnType($tableName, $keyName);
 
-        // We allow a range of string-like types that can store UUIDs.
-        // This list is expanded to be more compatible with different database drivers.
         $allowedTypes = ['uuid', 'string', 'char', 'guid', 'varchar', 'text'];
         $this->assertContains(
             Str::lower($columnType),
             $allowedTypes,
             "The column {$keyName} on table {$tableName} is of type {$columnType}, which is not suitable for UUIDs. Use `\$table->uuid('{$keyName}');` in your migration."
+        );
+
+        $this->assertFalse(
+            $model->getIncrementing(),
+            "The model {$className} must have 'public \$incrementing = false;' to use UUIDs."
+        );
+
+        $this->assertEquals(
+            'string',
+            $model->getKeyType(),
+            "The model {$className} must have 'protected \$keyType = \"string\";' to use UUIDs."
+        );
+
+        $this->assertTrue(
+            Str::isUuid($model->{$keyName}),
+            'The '.$model->getTable().' "' . $model->getKeyName() . '" must be Uuid.'
         );
     }
 
